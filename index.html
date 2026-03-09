@@ -1,14 +1,80 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
-  <link href='/style.css' rel='stylesheet'>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Research Suite</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i class="fab fa-youtube logo"></i>
+                <span>YT Research Suite</span>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-module="dashboard"><i class="fas fa-home"></i> Dashboard</li>
+                <li data-module="shorts-finder"><i class="fas fa-bolt"></i> Shorts Finder</li>
+                <li data-module="viral-collector"><i class="fas fa-chart-line"></i> Viral Collector</li>
+                <li data-module="channel-scraper"><i class="fas fa-users"></i> Channel Scraper</li>
+                <li data-module="tag-analyzer"><i class="fas fa-tags"></i> Tag Analyzer</li>
+            </ul>
+            <div class="sidebar-footer">
+                <p>Status: <span id="api-status" class="status-offline">Offline</span></p>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Section: API Key & Search -->
+            <header class="top-bar">
+                <div class="api-key-section">
+                    <label for="api-key">API KEY:</label>
+                    <input type="password" id="api-key" placeholder="Enter your YouTube Data API v3 Key">
+                    <button id="save-api-key" class="btn-secondary">Save Key</button>
+                </div>
+                <div class="global-search">
+                    <input type="text" id="keyword-input" placeholder="Keyword Search...">
+                    <button id="main-search-btn" class="btn-primary">Search</button>
+                </div>
+            </header>
+
+            <!-- Dynamic Module Content -->
+            <section id="module-container" class="content-area">
+                <!-- Content will be injected here by main.js -->
+                <div id="loader" class="hidden">
+                    <div class="spinner"></div>
+                    <p>Fetching data from YouTube...</p>
+                </div>
+                <div id="dashboard" class="module-view">
+                    <h2>YouTube Research Dashboard</h2>
+                    <p>Welcome to the YouTube Research Suite. Use the sidebar to navigate through specialized tools.</p>
+                    <div id="dashboard-results" class="results-container">
+                        <!-- Default results table -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Export Section -->
+            <footer class="export-bar hidden">
+                <span>Results Found: <strong id="result-count">0</strong></span>
+                <div class="export-actions">
+                    <button id="export-csv" class="btn-outline">Export CSV</button>
+                    <button id="export-json" class="btn-outline">Export JSON</button>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <!-- Add Firebase products that you want to use -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
+    
+    <script src="main.js"></script>
 </body>
 </html>
