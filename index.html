@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Research Suite</title>
+    <title>YouTube Research Suite - Pro Analytics</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -13,14 +14,17 @@
         <nav class="sidebar">
             <div class="sidebar-header">
                 <i class="fab fa-youtube logo"></i>
-                <span>YT Research Suite</span>
+                <span>YT Research Pro</span>
             </div>
             <ul class="nav-links">
-                <li class="active" data-module="dashboard"><i class="fas fa-home"></i> Dashboard</li>
+                <li class="active" data-module="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</li>
+                <li data-module="search-videos"><i class="fas fa-search"></i> Video Research</li>
                 <li data-module="shorts-finder"><i class="fas fa-bolt"></i> Shorts Finder</li>
-                <li data-module="viral-collector"><i class="fas fa-chart-line"></i> Viral Collector</li>
-                <li data-module="channel-scraper"><i class="fas fa-users"></i> Channel Scraper</li>
-                <li data-module="tag-analyzer"><i class="fas fa-tags"></i> Tag Analyzer</li>
+                <li data-module="channel-discovery"><i class="fas fa-users"></i> Channel Discovery</li>
+                <li data-module="content-analyzer"><i class="fas fa-microscope"></i> Content Analyzer</li>
+                <li data-module="analysis-list"><i class="fas fa-list-check"></i> Analysis List <span id="collection-count" class="badge">0</span></li>
+                <li data-module="keyword-intel"><i class="fas fa-brain"></i> Keyword Intel</li>
+                <li data-module="breakout-detector"><i class="fas fa-fire"></i> Breakout Detection</li>
             </ul>
             <div class="sidebar-footer">
                 <p>Status: <span id="api-status" class="status-offline">Offline</span></p>
@@ -29,39 +33,67 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Top Section: API Key & Search -->
             <header class="top-bar">
                 <div class="api-key-section">
-                    <label for="api-key">API KEY:</label>
-                    <input type="password" id="api-key" placeholder="Enter your YouTube Data API v3 Key">
-                    <button id="save-api-key" class="btn-secondary">Save Key</button>
+                    <input type="password" id="api-key" placeholder="YouTube API Key">
+                    <button id="save-api-key" class="btn-secondary">Save</button>
                 </div>
                 <div class="global-search">
-                    <input type="text" id="keyword-input" placeholder="Keyword Search...">
-                    <button id="main-search-btn" class="btn-primary">Search</button>
+                    <input type="text" id="keyword-input" placeholder="Search keywords, channels, or URLs...">
+                    <button id="main-search-btn" class="btn-primary">Analyze</button>
+                    <button id="toggle-filters" class="btn-outline"><i class="fas fa-sliders"></i></button>
                 </div>
             </header>
 
-            <!-- Dynamic Module Content -->
-            <section id="module-container" class="content-area">
-                <!-- Content will be injected here by main.js -->
-                <div id="loader" class="hidden">
-                    <div class="spinner"></div>
-                    <p>Fetching data from YouTube...</p>
-                </div>
-                <div id="dashboard" class="module-view">
-                    <h2>YouTube Research Dashboard</h2>
-                    <p>Welcome to the YouTube Research Suite. Use the sidebar to navigate through specialized tools.</p>
-                    <div id="dashboard-results" class="results-container">
-                        <!-- Default results table -->
+            <!-- Advanced Filters (Collapsible) -->
+            <section id="advanced-filters" class="filter-panel hidden">
+                <div class="filter-grid">
+                    <div class="filter-group">
+                        <label>Views Range</label>
+                        <div class="range-inputs">
+                            <input type="number" id="min-views" placeholder="Min">
+                            <input type="number" id="max-views" placeholder="Max">
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label>Subscribers Range</label>
+                        <div class="range-inputs">
+                            <input type="number" id="min-subs" placeholder="Min">
+                            <input type="number" id="max-subs" placeholder="Max">
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label>Upload Date</label>
+                        <select id="date-range">
+                            <option value="all">Anytime</option>
+                            <option value="7">Last 7 Days</option>
+                            <option value="30">Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                            <option value="365">Last Year</option>
+                        </select>
+                    </div>
+                    <div class="filter-group checkboxes">
+                        <label><input type="checkbox" id="filter-shorts"> Shorts Only</label>
+                        <label><input type="checkbox" id="filter-cc"> Creative Commons</label>
                     </div>
                 </div>
             </section>
 
-            <!-- Export Section -->
+            <section id="module-container" class="content-area">
+                <div id="loader" class="hidden">
+                    <div class="spinner"></div>
+                    <p id="loader-text">Analyzing YouTube Data...</p>
+                </div>
+                <!-- Views will be injected here -->
+            </section>
+
             <footer class="export-bar hidden">
-                <span>Results Found: <strong id="result-count">0</strong></span>
+                <div class="stats-summary">
+                    <span>Results: <strong id="result-count">0</strong></span>
+                    <span id="avg-performance-stat"></span>
+                </div>
                 <div class="export-actions">
+                    <button id="collect-contacts" class="btn-secondary"><i class="fas fa-envelope"></i> Collect Contacts</button>
                     <button id="export-csv" class="btn-outline">Export CSV</button>
                     <button id="export-json" class="btn-outline">Export JSON</button>
                 </div>
@@ -69,12 +101,14 @@
         </main>
     </div>
 
-    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <!-- Add Firebase products that you want to use -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
-    
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
     <script src="main.js"></script>
 </body>
 </html>

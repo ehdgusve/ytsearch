@@ -1,16 +1,18 @@
 /**
- * YouTube Research Suite - Cloudflare Optimized
+ * YouTube Research Suite - Pro Analytics Logic
  */
 
-// State Management
 const state = {
     apiKey: localStorage.getItem('yt_api_key') || '',
     currentModule: 'dashboard',
     results: [],
-    keyword: ''
+    keyword: '',
+    analysisList: JSON.parse(localStorage.getItem('yt_analysis_list') || '[]'),
+    activeVideo: null,
+    activeChannel: null,
+    channelAverages: {} // Store channel stats for Contribution Score
 };
 
-// DOM Elements
 const elements = {
     apiKeyInput: document.getElementById('api-key'),
     saveKeyBtn: document.getElementById('save-api-key'),
@@ -20,34 +22,38 @@ const elements = {
     moduleContainer: document.getElementById('module-container'),
     apiStatus: document.getElementById('api-status'),
     loader: document.getElementById('loader'),
+    loaderText: document.getElementById('loader-text'),
     exportBar: document.querySelector('.export-bar'),
     resultCount: document.getElementById('result-count'),
-    exportCsv: document.getElementById('export-csv'),
-    exportJson: document.getElementById('export-json')
+    collectionCountBadge: document.getElementById('collection-count'),
+    toggleFiltersBtn: document.getElementById('toggle-filters'),
+    filterPanel: document.getElementById('advanced-filters'),
+    modal: document.getElementById('detail-modal'),
+    modalBody: document.getElementById('modal-body'),
+    closeModal: document.querySelector('.close-modal')
 };
 
-// Initialize App
+// Initialize
 function init() {
     if (state.apiKey) {
         elements.apiKeyInput.value = state.apiKey;
         updateApiStatus(true);
     }
     setupEventListeners();
+    updateBadge();
+    renderModule();
 }
 
 function setupEventListeners() {
     elements.saveKeyBtn.addEventListener('click', () => {
-        const key = elements.apiKeyInput.value.trim();
-        if (key) {
-            state.apiKey = key;
-            localStorage.setItem('yt_api_key', key);
-            updateApiStatus(true);
-            alert('API Key saved successfully!');
-        }
+        state.apiKey = elements.apiKeyInput.value.trim();
+        localStorage.setItem('yt_api_key', state.apiKey);
+        updateApiStatus(!!state.apiKey);
+        alert('API Key Saved');
     });
 
     elements.navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
+        link.addEventListener('click', () => {
             elements.navLinks.forEach(l => l.classList.remove('active'));
             link.classList.add('active');
             state.currentModule = link.dataset.module;
@@ -56,12 +62,18 @@ function setupEventListeners() {
     });
 
     elements.searchBtn.addEventListener('click', handleSearch);
-    elements.keywordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSearch();
+    elements.keywordInput.addEventListener('keypress', e => e.key === 'Enter' && handleSearch());
+    
+    elements.toggleFiltersBtn.addEventListener('click', () => {
+        elements.filterPanel.classList.toggle('hidden');
     });
 
-    elements.exportCsv.addEventListener('click', () => exportData('csv'));
-    elements.exportJson.addEventListener('click', () => exportData('json'));
+    elements.closeModal.addEventListener('click', () => elements.modal.classList.add('hidden'));
+    window.addEventListener('click', e => e.target === elements.modal && elements.modal.classList.add('hidden'));
+
+    document.getElementById('export-csv').addEventListener('click', () => exportData('csv'));
+    document.getElementById('export-json').addEventListener('click', () => exportData('json'));
+    document.getElementById('collect-contacts').addEventListener('click', collectContacts);
 }
 
 function updateApiStatus(isOnline) {
@@ -69,204 +81,287 @@ function updateApiStatus(isOnline) {
     elements.apiStatus.className = isOnline ? 'status-online' : 'status-offline';
 }
 
+function updateBadge() {
+    elements.collectionCountBadge.textContent = state.analysisList.length;
+}
+
+// Advanced Search & Data Fetching
 async function handleSearch() {
     const keyword = elements.keywordInput.value.trim();
-    if (!keyword) return alert('Please enter a keyword');
-    if (!state.apiKey) return alert('Please enter and save your API Key first');
-
+    if (!keyword || !state.apiKey) return alert('Enter keyword and API key');
+    
     state.keyword = keyword;
-    showLoader(true);
+    showLoader(true, 'Fetching data from YouTube...');
 
     try {
         let endpoint = '/api/searchVideos';
         let params = `?keyword=${encodeURIComponent(keyword)}&apiKey=${state.apiKey}`;
 
-        switch (state.currentModule) {
-            case 'shorts-finder':
-                endpoint = '/api/searchShorts';
-                const period = document.getElementById('shorts-period')?.value || '30';
-                params += `&period=${period}`;
-                break;
-            case 'channel-scraper':
-                endpoint = '/api/searchChannels';
-                break;
-            case 'viral-collector':
-                endpoint = '/api/searchViralVideos';
-                break;
+        if (state.currentModule === 'shorts-finder') {
+            endpoint = '/api/searchShorts';
+            params += `&period=${document.getElementById('date-range').value}`;
+        } else if (state.currentModule === 'channel-discovery') {
+            endpoint = '/api/searchChannels';
         }
-        
-        const response = await fetch(endpoint + params);
-        if (!response.ok) throw new Error('API request failed');
-        
-        state.results = await response.json();
+
+        const res = await fetch(endpoint + params);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        state.results = data;
+
+        // Enrich with Channel Averages for Contribution Score
+        if (state.currentModule !== 'channel-discovery') {
+            await enrichWithChannelStats();
+        }
+
+        calculateProMetrics();
         renderResults();
     } catch (error) {
-        console.error('Search failed:', error);
-        alert('Error fetching data. Check console for details.');
+        alert('Error: ' + error.message);
     } finally {
         showLoader(false);
     }
 }
 
-function showLoader(show) {
-    if (show) {
-        elements.loader.classList.remove('hidden');
-        document.querySelector('.module-view')?.classList.add('hidden');
-    } else {
-        elements.loader.classList.add('hidden');
-        document.querySelector('.module-view')?.classList.remove('hidden');
-    }
-}
-
-// Module Rendering
-function renderModule() {
-    const container = document.getElementById('module-container');
-    const views = container.querySelectorAll('.module-view');
-    views.forEach(v => v.classList.add('hidden'));
-
-    let moduleHtml = '';
-    switch (state.currentModule) {
-        case 'dashboard':
-            moduleHtml = `
-                <div id="dashboard" class="module-view">
-                    <h2>YouTube Research Dashboard</h2>
-                    <p>Enter a keyword and search to begin analysis.</p>
-                    <div id="results-display"></div>
-                </div>`;
-            break;
-        case 'shorts-finder':
-            moduleHtml = `
-                <div id="shorts-finder" class="module-view">
-                    <h2>Shorts Viral Finder</h2>
-                    <div class="filter-bar">
-                        <select id="shorts-period">
-                            <option value="7">Last 7 Days</option>
-                            <option value="30">Last 30 Days</option>
-                            <option value="90">Last 90 Days</option>
-                        </select>
-                    </div>
-                    <div id="results-display"></div>
-                </div>`;
-            break;
-        case 'channel-scraper':
-            moduleHtml = `
-                <div id="channel-scraper" class="module-view">
-                    <h2>Channel Scraper</h2>
-                    <p>Discover top channels in this niche.</p>
-                    <div id="results-display"></div>
-                </div>`;
-            break;
-        case 'tag-analyzer':
-            moduleHtml = `
-                <div id="tag-analyzer" class="module-view">
-                    <h2>Tag Database Analyzer</h2>
-                    <div id="tag-report-container">
-                        ${renderTagAnalyzer()}
-                    </div>
-                </div>`;
-            break;
-        case 'viral-collector':
-            moduleHtml = `
-                <div id="viral-collector" class="module-view">
-                    <h2>Viral Video Collector</h2>
-                    <p>High-performing videos based on viral algorithms.</p>
-                    <div id="results-display"></div>
-                </div>`;
-            break;
-    }
-
-    const existing = document.getElementById(state.currentModule);
-    if (existing) {
-        existing.classList.remove('hidden');
-    } else {
-        const div = document.createElement('div');
-        div.innerHTML = moduleHtml;
-        container.appendChild(div.firstElementChild);
-    }
+async function enrichWithChannelStats() {
+    const uniqueChannelIds = [...new Set(state.results.map(v => v.channelId))];
+    showLoader(true, `Enriching stats for ${uniqueChannelIds.length} channels...`);
     
-    if (state.results.length > 0) renderResults();
+    for (const cid of uniqueChannelIds) {
+        if (!state.channelAverages[cid]) {
+            try {
+                const res = await fetch(`/api/getChannelDetails?channelId=${cid}&apiKey=${state.apiKey}`);
+                const details = await res.json();
+                state.channelAverages[cid] = {
+                    avgViews: details.totalViews / Math.max(1, details.videoCount),
+                    subscribers: details.subscribers
+                };
+            } catch (e) { console.error(e); }
+        }
+    }
 }
 
-function renderResults() {
-    const display = document.querySelector('.module-view:not(.hidden) #results-display');
-    if (!display) return;
+function calculateProMetrics() {
+    state.results = state.results.map(v => {
+        const chan = state.channelAverages[v.channelId] || { avgViews: v.views };
+        const contributionScore = v.views / Math.max(1, chan.avgViews);
+        const performanceScore = (v.likes + (v.comments || 0)) / Math.max(1, v.views);
+        
+        // Exposure Probability (Engagement + Recency)
+        const days = Math.max(1, (Date.now() - new Date(v.publishedAt).getTime()) / (1000*60*60*24));
+        const exposureProb = (performanceScore * 100) + (10 / days);
 
+        return {
+            ...v,
+            contributionScore,
+            performanceScore,
+            exposureProb,
+            evaluation: contributionScore > 2 ? 'Great' : contributionScore > 1.2 ? 'Good' : contributionScore > 0.8 ? 'Normal' : 'Bad',
+            isBreakout: contributionScore > 3
+        };
+    });
+}
+
+// Rendering Modules
+function renderModule() {
+    elements.moduleContainer.innerHTML = '';
+    elements.exportBar.classList.add('hidden');
+
+    switch (state.currentModule) {
+        case 'dashboard': renderDashboard(); break;
+        case 'search-videos': renderVideoGrid(); break;
+        case 'shorts-finder': renderVideoGrid(); break;
+        case 'channel-discovery': renderChannelGrid(); break;
+        case 'content-analyzer': renderContentAnalyzer(); break;
+        case 'analysis-list': renderAnalysisList(); break;
+        case 'keyword-intel': renderKeywordIntel(); break;
+        case 'breakout-detector': renderBreakoutDetection(); break;
+    }
+}
+
+function renderVideoGrid() {
+    if (state.results.length === 0) {
+        elements.moduleContainer.innerHTML = '<div class="card"><h3>Start a search to see results</h3></div>';
+        return;
+    }
     elements.exportBar.classList.remove('hidden');
     elements.resultCount.textContent = state.results.length;
 
-    display.innerHTML = state.currentModule === 'channel-scraper' 
-        ? renderChannelTable(state.results) 
-        : renderVideoTable(state.results);
-}
-
-function renderVideoTable(videos) {
-    return `
+    const html = `
         <table class="results-table">
             <thead>
                 <tr>
                     <th>Thumbnail</th>
-                    <th>Title</th>
-                    <th>Channel</th>
+                    <th>Video Info</th>
                     <th>Views</th>
-                    <th>Likes</th>
-                    <th>Date</th>
-                    ${state.currentModule === 'shorts-finder' || state.currentModule === 'viral-collector' ? '<th>Score</th>' : ''}
-                    <th>Links</th>
+                    <th>Scores</th>
+                    <th>Evaluation</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${videos.map(v => `
-                    <tr>
-                        <td class="thumbnail-cell"><img src="${v.thumbnail}" alt="thumb"></td>
-                        <td>${highlightText(v.title, state.keyword)}</td>
-                        <td>${v.channelTitle}</td>
+                ${state.results.map(v => `
+                    <tr onclick="openVideoDetail('${v.id}')">
+                        <td class="thumbnail-cell"><img src="${v.thumbnail}"></td>
+                        <td>
+                            <strong>${highlightText(v.title, state.keyword)}</strong><br>
+                            <small class="text-muted">${v.channelTitle} • ${new Date(v.publishedAt).toLocaleDateString()}</small>
+                        </td>
                         <td>${formatNumber(v.views)}</td>
-                        <td>${formatNumber(v.likes)}</td>
-                        <td>${new Date(v.publishedAt).toLocaleDateString()}</td>
-                        ${v.viralScore ? `<td><strong>${v.viralScore.toFixed(1)}</strong></td>` : ''}
-                        <td><a href="https://youtube.com/watch?v=${v.id}" target="_blank">View</a></td>
+                        <td>
+                            CS: ${v.contributionScore.toFixed(1)}x<br>
+                            PS: ${(v.performanceScore * 100).toFixed(1)}%
+                        </td>
+                        <td><span class="score-pill score-${v.evaluation.toLowerCase()}">${v.evaluation}</span></td>
+                        <td><button class="btn-outline btn-sm" onclick="addToAnalysisList(event, '${v.id}')">Add</button></td>
                     </tr>
                 `).join('')}
             </tbody>
         </table>
     `;
+    elements.moduleContainer.innerHTML = html;
 }
 
-function renderChannelTable(channels) {
-    return `
-        <table class="results-table">
-            <thead>
-                <tr>
-                    <th>Thumbnail</th>
-                    <th>Channel Name</th>
-                    <th>Subscribers</th>
-                    <th>Total Views</th>
-                    <th>Videos</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${channels.map(c => `
-                    <tr>
-                        <td class="thumbnail-cell"><img src="${c.thumbnail}" style="width: 50px; border-radius: 50%;"></td>
-                        <td>${c.title}</td>
-                        <td>${formatNumber(c.subscribers)}</td>
-                        <td>${formatNumber(c.totalViews)}</td>
-                        <td>${formatNumber(c.videoCount)}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
+async function openVideoDetail(videoId) {
+    const v = state.results.find(res => res.id === videoId) || state.analysisList.find(res => res.id === videoId);
+    if (!v) return;
+
+    elements.modal.classList.remove('hidden');
+    elements.modalBody.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`/api/getComments?videoId=${videoId}&apiKey=${state.apiKey}`);
+        const comments = await res.json();
+
+        elements.modalBody.innerHTML = `
+            <div class="video-detail-grid">
+                <div class="video-preview">
+                    <img src="${v.thumbnail}" style="width: 100%; border-radius: 12px;">
+                    <h2>${v.title}</h2>
+                    <p class="text-muted">${v.description.substring(0, 200)}...</p>
+                </div>
+                <div class="video-stats">
+                    <h3>Performance Analysis</h3>
+                    <div class="stat-row"><span>Views</span><strong>${formatNumber(v.views)}</strong></div>
+                    <div class="stat-row"><span>Contribution</span><strong>${v.contributionScore.toFixed(2)}x</strong></div>
+                    <div class="stat-row"><span>Engagement</span><strong>${(v.performanceScore * 100).toFixed(2)}%</strong></div>
+                    <canvas id="growthChart" width="400" height="200"></canvas>
+                    
+                    <h3>Top Comments</h3>
+                    <div class="comments-list">
+                        ${comments.map(c => `
+                            <div class="comment">
+                                <strong>${c.author} (${c.likes} likes)</strong>
+                                <p>${c.text}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        renderGrowthChart(v.views);
+    } catch (e) {
+        elements.modalBody.innerHTML = '<p>Error loading details</p>';
+    }
+}
+
+function renderGrowthChart(views) {
+    const ctx = document.getElementById('growthChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Day 1', 'Day 3', 'Day 7', 'Day 14', 'Current'],
+            datasets: [{
+                label: 'Estimated View Growth',
+                data: [views * 0.1, views * 0.3, views * 0.6, views * 0.8, views],
+                borderColor: '#ff0000',
+                tension: 0.4
+            }]
+        }
+    });
+}
+
+function renderDashboard() {
+    if (state.results.length === 0) {
+        elements.moduleContainer.innerHTML = '<h2>Dashboard</h2><p>Search first to see analytics.</p>';
+        return;
+    }
+
+    const html = `
+        <h2>Pro Analytics Dashboard</h2>
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>Views Distribution</h3>
+                <canvas id="viewsDistChart"></canvas>
+            </div>
+            <div class="card">
+                <h3>Engagement Ratios</h3>
+                <canvas id="engagementDistChart"></canvas>
+            </div>
+            <div class="card">
+                <h3>Top Keywords</h3>
+                <div id="top-keywords-list"></div>
+            </div>
+        </div>
     `;
+    elements.moduleContainer.innerHTML = html;
+
+    // Charts
+    const viewsData = state.results.map(v => v.views);
+    new Chart(document.getElementById('viewsDistChart'), {
+        type: 'bar',
+        data: {
+            labels: state.results.slice(0, 5).map(v => v.title.substring(0, 15) + '...'),
+            datasets: [{ label: 'Views', data: viewsData.slice(0, 5), backgroundColor: '#ff0000' }]
+        }
+    });
+
+    const engagementData = state.results.map(v => v.performanceScore * 100);
+    new Chart(document.getElementById('engagementDistChart'), {
+        type: 'radar',
+        data: {
+            labels: state.results.slice(0, 5).map(v => v.title.substring(0, 10)),
+            datasets: [{ label: 'Engagement Rate %', data: engagementData.slice(0, 5), borderColor: '#065fd4' }]
+        }
+    });
 }
 
-function renderTagAnalyzer() {
-    if (state.results.length === 0) return '<p>Search first to analyze tags.</p>';
-    const tags = {};
-    state.results.forEach(v => v.tags?.forEach(t => tags[t] = (tags[t] || 0) + 1));
-    const sortedTags = Object.entries(tags).sort((a,b) => b[1] - a[1]).slice(0, 30);
-    return `<h3>Top 30 Tags</h3><div class="tag-cloud">${sortedTags.map(([tag, count]) => `<span class="tag">${tag} (${count})</span>`).join('')}</div>`;
+// Collection Logic
+function addToAnalysisList(e, videoId) {
+    e.stopPropagation();
+    const v = state.results.find(res => res.id === videoId);
+    if (!v) return;
+    
+    if (!state.analysisList.find(item => item.id === videoId)) {
+        state.analysisList.push(v);
+        localStorage.setItem('yt_analysis_list', JSON.stringify(state.analysisList));
+        updateBadge();
+        alert('Added to Analysis List');
+    }
 }
 
+function collectContacts() {
+    const emails = [];
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    
+    state.results.forEach(v => {
+        const found = v.description?.match(emailRegex);
+        if (found) found.forEach(email => emails.push({ channel: v.channelTitle, email }));
+    });
+
+    if (emails.length === 0) return alert('No emails found in descriptions.');
+    
+    let csv = 'Channel,Email\n' + emails.map(e => `"${e.channel}","${e.email}"`).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `contacts_${state.keyword}.csv`;
+    a.click();
+}
+
+// Helpers
 function formatNumber(num) {
     if (!num) return '0';
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -279,6 +374,11 @@ function highlightText(text, keyword) {
     return text.replace(new RegExp(`(${keyword})`, 'gi'), '<span class="highlight">$1</span>');
 }
 
+function showLoader(show, text = 'Loading...') {
+    elements.loader.classList.toggle('hidden', !show);
+    elements.loaderText.textContent = text;
+}
+
 function exportData(format) {
     if (state.results.length === 0) return;
     const content = format === 'json' ? JSON.stringify(state.results, null, 2) : 
@@ -287,8 +387,12 @@ function exportData(format) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `yt_research_${state.keyword}_${Date.now()}.${format}`;
+    a.download = `yt_pro_analytics_${Date.now()}.${format}`;
     a.click();
 }
+
+// Expose functions for inline onclick handlers
+window.openVideoDetail = openVideoDetail;
+window.addToAnalysisList = addToAnalysisList;
 
 document.addEventListener('DOMContentLoaded', init);
