@@ -12,19 +12,32 @@
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <nav class="sidebar">
-            <div class="sidebar-header">
+            <div class="sidebar-header" id="home-logo" style="cursor: pointer;">
                 <i class="fab fa-youtube logo"></i>
                 <span>YT Research Pro</span>
             </div>
+            <div class="language-select-container">
+                <select id="language-select">
+                    <option value="en">English</option>
+                    <option value="ko">한국어</option>
+                </select>
+            </div>
             <ul class="nav-links">
-                <li class="active" data-module="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</li>
-                <li data-module="search-videos"><i class="fas fa-search"></i> Video Research</li>
-                <li data-module="shorts-finder"><i class="fas fa-bolt"></i> Shorts Finder</li>
-                <li data-module="channel-discovery"><i class="fas fa-users"></i> Channel Discovery</li>
-                <li data-module="content-analyzer"><i class="fas fa-microscope"></i> Content Analyzer</li>
-                <li data-module="analysis-list"><i class="fas fa-list-check"></i> Analysis List <span id="collection-count" class="badge">0</span></li>
-                <li data-module="keyword-intel"><i class="fas fa-brain"></i> Keyword Intel</li>
-                <li data-module="breakout-detector"><i class="fas fa-fire"></i> Breakout Detection</li>
+                <li class="active" data-module="dashboard"><i class="fas fa-chart-pie"></i> <span data-i18n="dashboard">Dashboard</span></li>
+                <li data-module="search-videos"><i class="fas fa-search"></i> <span data-i18n="videoResearch">Video Research</span></li>
+                <li data-module="shorts-finder"><i class="fas fa-bolt"></i> <span data-i18n="shortsFinder">Shorts Finder</span></li>
+                <li data-module="channel-discovery"><i class="fas fa-users"></i> <span data-i18n="channelDiscovery">Channel Discovery</span></li>
+                
+                <li class="nav-divider">Growth Intelligence</li>
+                <li data-module="mass-channel-collector"><i class="fas fa-layer-group"></i> <span data-i18n="massChannelCollector">Mass Channel Collector</span></li>
+                <li data-module="shorts-trend-analyzer"><i class="fas fa-trending-up"></i> <span data-i18n="shortsTrendAnalyzer">Shorts Trend Analyzer</span></li>
+                <li data-module="viral-prediction-engine"><i class="fas fa-brain"></i> <span data-i18n="viralPredictionEngine">Viral Prediction Engine</span></li>
+
+                <li class="nav-divider">Analysis</li>
+                <li data-module="content-analyzer"><i class="fas fa-microscope"></i> <span data-i18n="contentAnalyzer">Content Analyzer</span></li>
+                <li data-module="analysis-list"><i class="fas fa-list-check"></i> <span data-i18n="analysisList">Analysis List</span> <span id="collection-count" class="badge">0</span></li>
+                <li data-module="keyword-intel"><i class="fas fa-brain"></i> <span data-i18n="keywordIntel">Keyword Intel</span></li>
+                <li data-module="breakout-detector"><i class="fas fa-fire"></i> <span data-i18n="breakoutDetection">Breakout Detection</span></li>
             </ul>
             <div class="sidebar-footer">
                 <p>Status: <span id="api-status" class="status-offline">Offline</span></p>

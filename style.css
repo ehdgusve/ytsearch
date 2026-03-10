@@ -25,8 +25,26 @@ body { font-family: "Roboto", Arial, sans-serif; background-color: var(--bg-colo
 .nav-links { list-style: none; flex-grow: 1; }
 .nav-links li { padding: 12px 24px; cursor: pointer; display: flex; align-items: center; gap: 15px; transition: 0.2s; color: var(--text-muted); }
 .nav-links li:hover { background-color: #f2f2f2; color: var(--text-color); }
-.nav-links li.active { background-color: #f2f2f2; font-weight: 500; border-left: 4px solid var(--primary-color); color: var(--text-color); }
-.badge { background: var(--primary-color); color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; margin-left: auto; }
+.nav-divider {
+    padding: 20px 24px 10px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.language-select-container {
+    padding: 0 24px 20px;
+}
+
+#language-select {
+    width: 100%;
+    padding: 5px;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
 
 /* Main Content */
 .main-content { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }

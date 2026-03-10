@@ -11,7 +11,7 @@ export async function onRequest(context) {
   const YT_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
   try {
-    const searchRes = await fetch(`${YT_API_BASE}/search?part=snippet&q=${encodeURIComponent(keyword)}&type=channel&maxResults=20&key=${apiKey}`);
+    const searchRes = await fetch(`${YT_API_BASE}/search?part=snippet&q=${encodeURIComponent(keyword)}&type=channel&maxResults=50&key=${apiKey}`);
     const searchData = await searchRes.json();
     
     const channelIds = searchData.items.map(item => item.id.channelId);
@@ -22,6 +22,7 @@ export async function onRequest(context) {
       id: item.id,
       title: item.snippet.title,
       description: item.snippet.description,
+      publishedAt: item.snippet.publishedAt,
       thumbnail: item.snippet.thumbnails.default.url,
       subscribers: parseInt(item.statistics.subscriberCount) || 0,
       totalViews: parseInt(item.statistics.viewCount) || 0,
