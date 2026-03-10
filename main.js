@@ -35,7 +35,20 @@ const translations = {
         velocity: "Velocity",
         viralScore: "Viral Score",
         viralProb: "Viral Probability",
-        trendScore: "Trend Score"
+        trendScore: "Trend Score",
+        viewsRange: "Views Range",
+        subsRange: "Subscribers Range",
+        uploadDate: "Upload Date",
+        shortsOnly: "Shorts Only",
+        creativeCommons: "Creative Commons",
+        anytime: "Anytime",
+        last7Days: "Last 7 Days",
+        last30Days: "Last 30 Days",
+        last90Days: "Last 90 Days",
+        lastYear: "Last Year",
+        min: "Min",
+        max: "Max",
+        apiKeyPlaceholder: "YouTube API Key"
     },
     ko: {
         dashboard: "대시보드",
@@ -69,7 +82,20 @@ const translations = {
         velocity: "조회수 속도",
         viralScore: "바이럴 점수",
         viralProb: "바이럴 확률",
-        trendScore: "트렌드 점수"
+        trendScore: "트렌드 점수",
+        viewsRange: "조회수 범위",
+        subsRange: "구독자 범위",
+        uploadDate: "업로드 날짜",
+        shortsOnly: "쇼츠 전용",
+        creativeCommons: "크리에이티브 커먼즈",
+        anytime: "모든 기간",
+        last7Days: "최근 7일",
+        last30Days: "최근 30일",
+        last90Days: "최근 90일",
+        lastYear: "최근 1년",
+        min: "최소",
+        max: "최대",
+        apiKeyPlaceholder: "유튜브 API 키"
     }
 };
 
@@ -122,13 +148,24 @@ function init() {
 
 function updateLanguage() {
     const t = translations[state.language];
+    
+    // Update text content
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
         if (t[key]) el.textContent = t[key];
     });
+
+    // Update placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.dataset.i18nPlaceholder;
+        if (t[key]) el.placeholder = t[key];
+    });
+
     elements.keywordInput.placeholder = t.searchPlaceholder;
+    elements.apiKeyInput.placeholder = t.apiKeyPlaceholder;
     elements.searchBtn.textContent = t.analyze;
     elements.saveKeyBtn.textContent = t.save;
+    
     localStorage.setItem('yt_lang', state.language);
 }
 

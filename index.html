@@ -62,32 +62,32 @@
             <section id="advanced-filters" class="filter-panel hidden">
                 <div class="filter-grid">
                     <div class="filter-group">
-                        <label>Views Range</label>
+                        <label data-i18n="viewsRange">Views Range</label>
                         <div class="range-inputs">
-                            <input type="number" id="min-views" placeholder="Min">
-                            <input type="number" id="max-views" placeholder="Max">
+                            <input type="number" id="min-views" data-i18n-placeholder="min" placeholder="Min">
+                            <input type="number" id="max-views" data-i18n-placeholder="max" placeholder="Max">
                         </div>
                     </div>
                     <div class="filter-group">
-                        <label>Subscribers Range</label>
+                        <label data-i18n="subsRange">Subscribers Range</label>
                         <div class="range-inputs">
-                            <input type="number" id="min-subs" placeholder="Min">
-                            <input type="number" id="max-subs" placeholder="Max">
+                            <input type="number" id="min-subs" data-i18n-placeholder="min" placeholder="Min">
+                            <input type="number" id="max-subs" data-i18n-placeholder="max" placeholder="Max">
                         </div>
                     </div>
                     <div class="filter-group">
-                        <label>Upload Date</label>
+                        <label data-i18n="uploadDate">Upload Date</label>
                         <select id="date-range">
-                            <option value="all">Anytime</option>
-                            <option value="7">Last 7 Days</option>
-                            <option value="30">Last 30 Days</option>
-                            <option value="90">Last 90 Days</option>
-                            <option value="365">Last Year</option>
+                            <option value="all" data-i18n="anytime">Anytime</option>
+                            <option value="7" data-i18n="last7Days">Last 7 Days</option>
+                            <option value="30" data-i18n="last30Days">Last 30 Days</option>
+                            <option value="90" data-i18n="last90Days">Last 90 Days</option>
+                            <option value="365" data-i18n="lastYear">Last Year</option>
                         </select>
                     </div>
                     <div class="filter-group checkboxes">
-                        <label><input type="checkbox" id="filter-shorts"> Shorts Only</label>
-                        <label><input type="checkbox" id="filter-cc"> Creative Commons</label>
+                        <label><input type="checkbox" id="filter-shorts"> <span data-i18n="shortsOnly">Shorts Only</span></label>
+                        <label><input type="checkbox" id="filter-cc"> <span data-i18n="creativeCommons">Creative Commons</span></label>
                     </div>
                 </div>
             </section>
