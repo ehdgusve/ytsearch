@@ -1,5 +1,5 @@
 /**
- * YouTube Research Suite - Core Logic
+ * YouTube Research Suite - Cloudflare Optimized
  */
 
 // State Management
@@ -36,7 +36,6 @@ function init() {
 }
 
 function setupEventListeners() {
-    // API Key Save
     elements.saveKeyBtn.addEventListener('click', () => {
         const key = elements.apiKeyInput.value.trim();
         if (key) {
@@ -47,7 +46,6 @@ function setupEventListeners() {
         }
     });
 
-    // Navigation
     elements.navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             elements.navLinks.forEach(l => l.classList.remove('active'));
@@ -57,25 +55,18 @@ function setupEventListeners() {
         });
     });
 
-    // Search
     elements.searchBtn.addEventListener('click', handleSearch);
     elements.keywordInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleSearch();
     });
 
-    // Export
     elements.exportCsv.addEventListener('click', () => exportData('csv'));
     elements.exportJson.addEventListener('click', () => exportData('json'));
 }
 
 function updateApiStatus(isOnline) {
-    if (isOnline) {
-        elements.apiStatus.textContent = 'Online';
-        elements.apiStatus.className = 'status-online';
-    } else {
-        elements.apiStatus.textContent = 'Offline';
-        elements.apiStatus.className = 'status-offline';
-    }
+    elements.apiStatus.textContent = isOnline ? 'Online' : 'Offline';
+    elements.apiStatus.className = isOnline ? 'status-online' : 'status-offline';
 }
 
 async function handleSearch() {
@@ -87,22 +78,27 @@ async function handleSearch() {
     showLoader(true);
 
     try {
-        let data;
+        let endpoint = '/api/searchVideos';
+        let params = `?keyword=${encodeURIComponent(keyword)}&apiKey=${state.apiKey}`;
+
         switch (state.currentModule) {
             case 'shorts-finder':
-                data = await fetchShorts(keyword);
+                endpoint = '/api/searchShorts';
+                const period = document.getElementById('shorts-period')?.value || '30';
+                params += `&period=${period}`;
                 break;
             case 'channel-scraper':
-                data = await fetchChannels(keyword);
+                endpoint = '/api/searchChannels';
                 break;
             case 'viral-collector':
-                data = await fetchViralVideos(keyword);
+                endpoint = '/api/searchViralVideos';
                 break;
-            default:
-                data = await fetchGeneralSearch(keyword);
         }
         
-        state.results = data;
+        const response = await fetch(endpoint + params);
+        if (!response.ok) throw new Error('API request failed');
+        
+        state.results = await response.json();
         renderResults();
     } catch (error) {
         console.error('Search failed:', error);
@@ -125,7 +121,6 @@ function showLoader(show) {
 // Module Rendering
 function renderModule() {
     const container = document.getElementById('module-container');
-    // Keep loader
     const views = container.querySelectorAll('.module-view');
     views.forEach(v => v.classList.add('hidden'));
 
@@ -149,7 +144,6 @@ function renderModule() {
                             <option value="30">Last 30 Days</option>
                             <option value="90">Last 90 Days</option>
                         </select>
-                        <input type="number" id="min-views" placeholder="Min Views (e.g. 10000)">
                     </div>
                     <div id="results-display"></div>
                 </div>`;
@@ -181,8 +175,6 @@ function renderModule() {
             break;
     }
 
-    // Replace or update content area
-    // Simplified for now: append a new div if it doesn't exist
     const existing = document.getElementById(state.currentModule);
     if (existing) {
         existing.classList.remove('hidden');
@@ -192,13 +184,9 @@ function renderModule() {
         container.appendChild(div.firstElementChild);
     }
     
-    // Reset results view if switching modules
-    if (state.results.length > 0) {
-        renderResults();
-    }
+    if (state.results.length > 0) renderResults();
 }
 
-// Result Rendering
 function renderResults() {
     const display = document.querySelector('.module-view:not(.hidden) #results-display');
     if (!display) return;
@@ -206,14 +194,9 @@ function renderResults() {
     elements.exportBar.classList.remove('hidden');
     elements.resultCount.textContent = state.results.length;
 
-    let html = '';
-    if (state.currentModule === 'channel-scraper') {
-        html = renderChannelTable(state.results);
-    } else {
-        html = renderVideoTable(state.results);
-    }
-    
-    display.innerHTML = html;
+    display.innerHTML = state.currentModule === 'channel-scraper' 
+        ? renderChannelTable(state.results) 
+        : renderVideoTable(state.results);
 }
 
 function renderVideoTable(videos) {
@@ -259,7 +242,6 @@ function renderChannelTable(channels) {
                     <th>Subscribers</th>
                     <th>Total Views</th>
                     <th>Videos</th>
-                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -270,7 +252,6 @@ function renderChannelTable(channels) {
                         <td>${formatNumber(c.subscribers)}</td>
                         <td>${formatNumber(c.totalViews)}</td>
                         <td>${formatNumber(c.videoCount)}</td>
-                        <td><button onclick="analyzeChannel('${c.id}')" class="btn-outline">Analyze Latest</button></td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -280,27 +261,12 @@ function renderChannelTable(channels) {
 
 function renderTagAnalyzer() {
     if (state.results.length === 0) return '<p>Search first to analyze tags.</p>';
-    
     const tags = {};
-    state.results.forEach(v => {
-        if (v.tags) {
-            v.tags.forEach(t => {
-                tags[t] = (tags[t] || 0) + 1;
-            });
-        }
-    });
-
+    state.results.forEach(v => v.tags?.forEach(t => tags[t] = (tags[t] || 0) + 1));
     const sortedTags = Object.entries(tags).sort((a,b) => b[1] - a[1]).slice(0, 30);
-
-    return `
-        <h3>Top 30 Tags</h3>
-        <div class="tag-cloud">
-            ${sortedTags.map(([tag, count]) => `<span class="tag">${tag} (${count})</span>`).join('')}
-        </div>
-    `;
+    return `<h3>Top 30 Tags</h3><div class="tag-cloud">${sortedTags.map(([tag, count]) => `<span class="tag">${tag} (${count})</span>`).join('')}</div>`;
 }
 
-// Helper Functions
 function formatNumber(num) {
     if (!num) return '0';
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -310,100 +276,19 @@ function formatNumber(num) {
 
 function highlightText(text, keyword) {
     if (!keyword) return text;
-    const re = new RegExp(`(${keyword})`, 'gi');
-    return text.replace(re, '<span class="highlight">$1</span>');
-}
-
-// Firebase Configuration (Replace with your own project config if needed)
-// Usually, Firebase Studio provides these as environment variables or auto-config
-const firebaseConfig = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "your-sender-id",
-    appId: "your-app-id"
-};
-
-// Initialize Firebase
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
-const db = firebase.firestore();
-const functions = firebase.functions();
-
-// Use emulator if running locally
-if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    // functions.useEmulator("localhost", 5001);
-}
-
-// API Fetching (Proxied via Firebase Functions)
-async function callFirebaseFunction(name, data) {
-    console.log(`Calling Firebase Function: ${name}`, data);
-    try {
-        const fn = functions.httpsCallable(name);
-        const result = await fn(data);
-        return result.data;
-    } catch (error) {
-        console.error(`Error in ${name}:`, error);
-        // Fallback to mock for development if functions are not yet deployed
-        if (error.code === 'not-found' || error.code === 'unavailable') {
-            console.warn('Functions not found, using mock data.');
-            return getMockData(name, data);
-        }
-        throw error;
-    }
-}
-
-function getMockData(name, data) {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const results = [];
-            for (let i = 0; i < 10; i++) {
-                results.push({
-                    id: 'vid' + i,
-                    title: `Sample ${name} Result ${i} for ${data.keyword}`,
-                    channelTitle: 'Elite Creator',
-                    views: Math.floor(Math.random() * 5000000),
-                    likes: Math.floor(Math.random() * 100000),
-                    comments: Math.floor(Math.random() * 5000),
-                    thumbnail: 'https://via.placeholder.com/120x90',
-                    publishedAt: new Date().toISOString(),
-                    tags: ['marketing', 'seo', 'youtube', 'viral'],
-                    viralScore: Math.random() * 100
-                });
-            }
-            resolve(results);
-        }, 1000);
-    });
+    return text.replace(new RegExp(`(${keyword})`, 'gi'), '<span class="highlight">$1</span>');
 }
 
 function exportData(format) {
     if (state.results.length === 0) return;
-    
-    let content = '';
-    let mimeType = '';
-    let fileName = `yt_research_${state.keyword}_${new Date().getTime()}`;
-
-    if (format === 'json') {
-        content = JSON.stringify(state.results, null, 2);
-        mimeType = 'application/json';
-        fileName += '.json';
-    } else {
-        const headers = Object.keys(state.results[0]).join(',');
-        const rows = state.results.map(obj => Object.values(obj).map(val => `"${val}"`).join(',')).join('\n');
-        content = headers + '\n' + rows;
-        mimeType = 'text/csv';
-        fileName += '.csv';
-    }
-
-    const blob = new Blob([content], { type: mimeType });
+    const content = format === 'json' ? JSON.stringify(state.results, null, 2) : 
+        Object.keys(state.results[0]).join(',') + '\n' + state.results.map(obj => Object.values(obj).map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = fileName;
+    a.download = `yt_research_${state.keyword}_${Date.now()}.${format}`;
     a.click();
 }
 
-// Initialize on load
 document.addEventListener('DOMContentLoaded', init);
