@@ -15,6 +15,11 @@ const translations = {
         analysisList: "Analysis List",
         keywordIntel: "Keyword Intel",
         breakoutDetection: "Breakout Detection",
+        trendAnalysis: "Trend Analysis",
+        region: "Region",
+        category: "Category",
+        recommendations: "Recommendations",
+        viralDetection: "Viral Detection",
         searchPlaceholder: "Search keywords, channels, or URLs...",
         analyze: "Analyze",
         save: "Save",
@@ -62,6 +67,11 @@ const translations = {
         analysisList: "분석 리스트",
         keywordIntel: "키워드 인텔",
         breakoutDetection: "급상승 탐지",
+        trendAnalysis: "트렌드 분석",
+        region: "지역",
+        category: "카테고리",
+        recommendations: "추천 영상",
+        viralDetection: "바이럴 탐지",
         searchPlaceholder: "키워드, 채널 또는 URL 검색...",
         analyze: "분석",
         save: "저장",
@@ -108,7 +118,11 @@ const state = {
     analysisList: JSON.parse(localStorage.getItem('yt_analysis_list') || '[]'),
     activeVideo: null,
     activeChannel: null,
-    channelAverages: {}
+    channelAverages: {},
+    regionCode: '',
+    videoCategoryId: '',
+    stats: null,
+    trendKeywords: []
 };
 
 const elements = {
@@ -228,7 +242,7 @@ function updateBadge() {
 // Advanced Search & Data Fetching
 async function handleSearch() {
     const keyword = elements.keywordInput.value.trim();
-    if (!keyword || !state.apiKey) return alert('Enter keyword and API key');
+    if (!state.apiKey) return alert('Enter API key');
     
     state.keyword = keyword;
     const t = translations[state.language];
@@ -236,34 +250,71 @@ async function handleSearch() {
 
     try {
         let endpoint = '/api/searchVideos';
-        let params = `?keyword=${encodeURIComponent(keyword)}&apiKey=${state.apiKey}`;
+        let params = `?apiKey=${state.apiKey}`;
 
-        if (state.currentModule === 'shorts-finder') {
+        // Feature 1, 2, 3: Trend Analysis (Region/Category)
+        if (state.currentModule === 'dashboard' || state.currentModule === 'breakout-detector') {
+            endpoint = '/api/getTrendVideos';
+            const region = document.getElementById('region-select').value;
+            const category = document.getElementById('category-select').value;
+            if (region) params += `&regionCode=${region}`;
+            if (category) params += `&videoCategoryId=${category}`;
+        } 
+        // Feature 4, 5, 8: Keyword/Pattern/Trend Analysis
+        else if (state.currentModule === 'keyword-intel' || state.currentModule === 'search-videos') {
+            endpoint = '/api/analyzeKeyword';
+            params += `&keyword=${encodeURIComponent(keyword)}`;
+        }
+        // Feature 7: Viral Detection
+        else if (state.currentModule === 'viral-prediction-engine') {
+            endpoint = '/api/getViralVideos';
+            params += `&keyword=${encodeURIComponent(keyword)}`;
+        }
+        // Feature 9: Channel Analysis
+        else if (state.currentModule === 'channel-discovery') {
+            // Extract channel ID if it's a URL
+            let cid = keyword;
+            if (keyword.includes('youtube.com/channel/')) cid = keyword.split('/channel/')[1].split('?')[0];
+            endpoint = '/api/getChannelAnalysis';
+            params += `&channelId=${cid}`;
+        }
+        // Feature 10: Video Performance
+        else if (state.currentModule === 'content-analyzer') {
+            let vid = keyword;
+            if (keyword.includes('v=')) vid = keyword.split('v=')[1].split('&')[0];
+            else if (keyword.includes('be/')) vid = keyword.split('be/')[1].split('?')[0];
+            endpoint = '/api/getVideoPerformance';
+            params += `&videoId=${vid}`;
+        }
+        else if (state.currentModule === 'shorts-finder') {
             endpoint = '/api/searchShorts';
-            params += `&period=${document.getElementById('date-range').value}`;
-        } else if (state.currentModule === 'channel-discovery') {
-            endpoint = '/api/searchChannels';
-        } else if (state.currentModule === 'viral-prediction-engine') {
-            endpoint = '/api/searchViralVideos';
-        } else if (state.currentModule === 'shorts-trend-analyzer') {
-            endpoint = '/api/searchShorts'; // Reuse searchShorts but with deeper analysis
+            params += `&keyword=${encodeURIComponent(keyword)}&period=${document.getElementById('date-range').value}`;
         }
 
         const res = await fetch(endpoint + params);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
-        state.results = data;
-
-        if (state.currentModule === 'viral-prediction-engine') {
-            await enrichForViralPrediction();
-        } else if (state.currentModule === 'shorts-trend-analyzer') {
-            calculateShortsTrends();
+        if (state.currentModule === 'keyword-intel' || state.currentModule === 'search-videos') {
+            state.results = data.videos;
+            state.stats = data.analysis;
+            state.trendKeywords = data.trendKeywords;
+        } else if (state.currentModule === 'dashboard' || state.currentModule === 'breakout-detector') {
+            state.results = data.videos;
+            state.stats = data.stats;
         } else if (state.currentModule === 'channel-discovery') {
-            calculateChannelScores();
-        } else if (state.currentModule !== 'mass-channel-collector') {
-            await enrichWithChannelStats();
-            calculateProMetrics();
+            state.results = data.stats.recentVideos;
+            state.activeChannel = data.channel;
+            state.stats = data.stats;
+        } else if (state.currentModule === 'content-analyzer') {
+            state.activeVideo = data;
+            state.results = []; // Recommendations will be fetched later if needed
+            // Fetch recommendations for feature 6
+            const recRes = await fetch(`/api/getRecommendations?videoId=${data.id}&apiKey=${state.apiKey}`);
+            const recData = await recRes.json();
+            state.results = recData;
+        } else {
+            state.results = data;
         }
 
         renderResults();
@@ -319,28 +370,190 @@ function renderModule() {
     elements.exportBar.classList.add('hidden');
 
     switch (state.currentModule) {
-        case 'dashboard': renderDashboard(); break;
+        case 'dashboard': renderTrendAnalysis(); break;
         case 'search-videos': renderVideoGrid(); break;
         case 'shorts-finder': renderVideoGrid(); break;
-        case 'channel-discovery': renderChannelGrid(); break;
+        case 'channel-discovery': renderChannelAnalysis(); break;
         case 'mass-channel-collector': renderMassChannelCollector(); break;
         case 'shorts-trend-analyzer': renderShortsTrendAnalyzer(); break;
         case 'viral-prediction-engine': renderViralPredictionEngine(); break;
         case 'content-analyzer': renderContentAnalyzer(); break;
         case 'analysis-list': renderAnalysisList(); break;
         case 'keyword-intel': renderKeywordIntel(); break;
-        case 'breakout-detector': renderBreakoutDetection(); break;
+        case 'breakout-detector': renderTrendAnalysis(); break;
     }
 }
 
 function renderResults() {
     switch (state.currentModule) {
+        case 'dashboard':
+        case 'breakout-detector': renderTrendAnalysis(); break;
         case 'search-videos':
+        case 'keyword-intel': renderKeywordIntel(); break;
         case 'shorts-finder': renderVideoGrid(); break;
-        case 'channel-discovery': renderChannelGrid(); break;
+        case 'channel-discovery': renderChannelAnalysis(); break;
         case 'viral-prediction-engine': renderViralGrid(); break;
+        case 'content-analyzer': renderContentAnalyzer(); break;
         case 'shorts-trend-analyzer': renderShortsTrendGrid(); break;
     }
+}
+
+// --- Feature 1, 2, 3: Trend Analysis ---
+function renderTrendAnalysis() {
+    const t = translations[state.language];
+    if (!state.results || state.results.length === 0) {
+        elements.moduleContainer.innerHTML = `<div class="card"><h2>${t.trendAnalysis}</h2><p>${t.startSearch}</p></div>`;
+        return;
+    }
+
+    const html = `
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>${t.results} Stats</h3>
+                <div class="stat-row"><span>Avg Views</span><strong>${formatNumber(state.stats.avgViews)}</strong></div>
+                <div class="stat-row"><span>Avg Engagement</span><strong>${(state.stats.avgEngagement * 100).toFixed(2)}%</strong></div>
+            </div>
+            <div class="card">
+                <h3>Views Distribution</h3>
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+        <div id="trend-results" style="margin-top:20px;"></div>
+    `;
+    elements.moduleContainer.innerHTML = html;
+    renderVideoGrid('trend-results');
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: state.results.slice(0, 10).map(v => v.title.substring(0, 15) + '...'),
+            datasets: [{
+                label: 'Views',
+                data: state.results.slice(0, 10).map(v => v.views),
+                backgroundColor: '#ff0000'
+            }]
+        }
+    });
+}
+
+// --- Feature 4, 5, 8: Keyword Intel ---
+function renderKeywordIntel() {
+    const t = translations[state.language];
+    if (!state.results || state.results.length === 0) {
+        elements.moduleContainer.innerHTML = `<div class="card"><h2>${t.keywordIntel}</h2><p>${t.startSearch}</p></div>`;
+        return;
+    }
+
+    const html = `
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>Pattern Analysis</h3>
+                <div class="stat-row"><span>Brackets in Title</span><strong>${(state.stats.patterns.brackets * 100).toFixed(0)}%</strong></div>
+                <div class="stat-row"><span>Numbers in Title</span><strong>${(state.stats.patterns.numbers * 100).toFixed(0)}%</strong></div>
+                <div class="stat-row"><span>Question Marks</span><strong>${(state.stats.patterns.questionMarks * 100).toFixed(0)}%</strong></div>
+            </div>
+            <div class="card">
+                <h3>Trend Keywords</h3>
+                <div class="tag-cloud">
+                    ${state.trendKeywords.map(tk => `<span class="tag">${tk.keyword} (${tk.count})</span>`).join('')}
+                </div>
+            </div>
+        </div>
+        <div id="keyword-results" style="margin-top:20px;"></div>
+    `;
+    elements.moduleContainer.innerHTML = html;
+    renderVideoGrid('keyword-results');
+}
+
+// --- Feature 9: Channel Analysis ---
+function renderChannelAnalysis() {
+    const t = translations[state.language];
+    if (!state.activeChannel) {
+        elements.moduleContainer.innerHTML = `<div class="card"><h2>${t.channelDiscovery}</h2><p>${t.startSearch}</p></div>`;
+        return;
+    }
+
+    const html = `
+        <div class="channel-header card">
+            <img src="${state.activeChannel.thumbnail}" class="channel-avatar-large" style="width:100px; border-radius:50%;">
+            <div class="channel-info-large">
+                <h2>${state.activeChannel.title}</h2>
+                <div class="stat-grid" style="display:flex; gap:20px; margin-top:10px;">
+                    <div class="stat-item"><span>Subscribers: </span><strong>${formatNumber(state.activeChannel.subscribers)}</strong></div>
+                    <div class="stat-item"><span>Total Views: </span><strong>${formatNumber(state.activeChannel.totalViews)}</strong></div>
+                    <div class="stat-item"><span>Videos: </span><strong>${state.activeChannel.videoCount}</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="dashboard-grid" style="margin-top:20px;">
+            <div class="card">
+                <h3>Performance Stats</h3>
+                <div class="stat-row"><span>Avg Views (Recent)</span><strong>${formatNumber(state.stats.avgViews)}</strong></div>
+                <div class="stat-row"><span>Avg Engagement</span><strong>${(state.stats.avgEngagement * 100).toFixed(2)}%</strong></div>
+            </div>
+        </div>
+        <h3 style="margin-top:20px;">Recent Videos</h3>
+        <div id="channel-recent-results"></div>
+    `;
+    elements.moduleContainer.innerHTML = html;
+    renderVideoGrid('channel-recent-results');
+}
+
+// --- Feature 10 & 6: Content Analyzer & Recommendations ---
+function renderContentAnalyzer() {
+    const t = translations[state.language];
+    if (!state.activeVideo) {
+        elements.moduleContainer.innerHTML = `<div class="card"><h2>${t.contentAnalyzer}</h2><p>${t.startSearch}</p></div>`;
+        return;
+    }
+
+    const html = `
+        <div class="video-performance-card card">
+            <div class="video-preview-large">
+                <img src="${state.activeVideo.thumbnail}" style="width:100%; max-width:400px; border-radius:12px;">
+                <h2>${state.activeVideo.title}</h2>
+            </div>
+            <div class="video-stats-large">
+                <h3>Video Stats</h3>
+                <div class="stat-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px;">
+                    <div class="stat-item"><span>Views</span><br><strong>${formatNumber(state.activeVideo.views)}</strong></div>
+                    <div class="stat-item"><span>Likes</span><br><strong>${formatNumber(state.activeVideo.likes)}</strong></div>
+                    <div class="stat-item"><span>Engagement</span><br><strong>${(state.activeVideo.engagementRate * 100).toFixed(2)}%</strong></div>
+                    <div class="stat-item"><span>Velocity</span><br><strong>${state.activeVideo.velocity.toFixed(0)} v/h</strong></div>
+                </div>
+            </div>
+        </div>
+        <h3 style="margin-top:20px;">${t.recommendations} (Similarity-based)</h3>
+        <div id="recommendation-results"></div>
+    `;
+    elements.moduleContainer.innerHTML = html;
+    
+    // Render recommendations in a grid
+    const target = document.getElementById('recommendation-results');
+    const recHtml = `
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Thumbnail</th>
+                    <th>Title</th>
+                    <th>Similarity</th>
+                    <th>Views</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${state.results.map(v => `
+                    <tr>
+                        <td class="thumbnail-cell"><img src="${v.thumbnail}"></td>
+                        <td><strong>${v.title}</strong><br><small>${v.channelTitle}</small></td>
+                        <td><strong>${(v.similarityScore * 100).toFixed(0)}%</strong></td>
+                        <td>${formatNumber(v.views)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    target.innerHTML = recHtml;
 }
 
 // --- Mass Channel Collector ---
